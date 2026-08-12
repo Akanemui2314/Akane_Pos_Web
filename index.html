@@ -411,7 +411,7 @@
       }
     }
 
-    // 🖼️ ปรับเป็นความละเอียด HD 800x800 และ Quality 90% รูปไม่แตกแน่นอน
+    // 🖼️ ฟังก์ชั่นอัปโหลดภาพคมชัดสูง (คงความชัดระดับต้นฉบับ 100% ไร้รอยบีบอัดแตก)
     function handleImageUpload(event) {
       const file = event.target.files[0];
       if (!file) return;
@@ -421,20 +421,31 @@
         const img = new Image();
         img.onload = function() {
           const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 800, MAX_HEIGHT = 800; // ความละเอียด HD สำหรับ iPad
-          let width = img.width, height = img.height;
+          const MAX_SIZE = 1600; // รองรับความละเอียดสูง คมชัด HD บน Retina Display
+          let width = img.width;
+          let height = img.height;
 
-          if (width > height) {
-            if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-          } else {
-            if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
+          if (width > MAX_SIZE || height > MAX_SIZE) {
+            if (width > height) {
+              height *= MAX_SIZE / width;
+              width = MAX_SIZE;
+            } else {
+              width *= MAX_SIZE / height;
+              height = MAX_SIZE;
+            }
           }
 
-          canvas.width = width; canvas.height = height;
+          canvas.width = width;
+          canvas.height = height;
           const ctx = canvas.getContext('2d');
+          
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
           ctx.drawImage(img, 0, 0, width, height);
 
-          currentImageBase64 = canvas.toDataURL('image/jpeg', 0.90); // คุณภาพไฟล์ 90% คมชัดใสเป๊ะ
+          // แปลงเป็น PNG คมชัดเป๊ะ 100%
+          currentImageBase64 = canvas.toDataURL('image/png');
+          
           const imgPreview = document.getElementById('img-preview');
           imgPreview.src = currentImageBase64;
           imgPreview.style.objectPosition = `center ${currentFocusY}%`;
@@ -540,7 +551,7 @@
     async function deleteAccount(accDocId) {
       if (confirm('คุณต้องการลบบัญชีนี้ใช่หรือไม่?')) {
         try {
-          await window.fbDeleteDoc(window.fbDoc(window.db, "accounts", accDocId));
+          await window.fbDeleteDoc(window.fbDoc(window.db, "accounts", accDocDocId));
         } catch(e) {
           console.error(e);
           alert("ไม่สามารถลบได้: " + e.message);
