@@ -125,8 +125,8 @@
     <main id="tab-inventory" class="flex-1 p-4 md:p-6 hidden bg-white">
       <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div>
-          <h2 class="text-lg md:text-xl font-bold text-pastel-dark">รายการสินค้าและสต็อก (Real-time Cloud)</h2>
-          <p class="text-xs text-pastel-dark/70">ข้อมูลอัปเดตตรงกันทุกเครื่องอัตโนมัติ</p>
+          <h2 class="text-lg md:text-xl font-bold text-pastel-dark">รายการสินค้าและสต็อก</h2>
+          <p class="text-xs text-pastel-dark/70">ข้อมูลอัปเดตอัตโนมัติ</p>
         </div>
         <button onclick="openProductModal()" class="bg-pastel-green hover:bg-[#6c8f72] text-white px-4 py-2 rounded-xl text-xs font-semibold transition shadow-md flex items-center gap-1.5">
           <i class="fa-solid fa-plus"></i> เพิ่มสินค้าใหม่
@@ -286,8 +286,8 @@
       </div>
       <button onclick="refreshQRCode()" class="text-[11px] text-pastel-dark/60 font-medium mb-4 flex items-center justify-center gap-1.5 mx-auto bg-slate-50 px-3 py-1 rounded-lg border border-slate-200"><i class="fa-solid fa-rotate-right"></i> สแกนไม่ได้? สร้าง QR ใหม่</button>
       <div class="space-y-2">
-        <button onclick="confirmPayment()" class="w-full bg-pastel-green text-white font-bold py-3 rounded-2xl shadow-md"><i class="fa-solid fa-circle-check"></i> ยืนยันรับเงินแล้ว (ตัดสต็อก)</button>
-        <button onclick="closePaymentModal()" class="w-full bg-slate-100 text-pastel-dark/70 font-semibold py-2 rounded-2xl text-xs md:text-sm">ยกเลิก / ย้อนกลับ</button>
+        <button onclick="confirmPayment()" class="w-full bg-pastel-green text-white font-bold py-3 rounded-2xl shadow-md"><i class="fa-solid fa-circle-check"></i> ยืนยันรับเงิน</button>
+        <button onclick="closePaymentModal()" class="w-full bg-slate-100 text-pastel-dark/70 font-semibold py-2 rounded-2xl text-xs md:text-sm">ย้อนกลับ</button>
       </div>
     </div>
   </div>
@@ -794,7 +794,7 @@
       } finally {
         if (btnSave) {
           btnSave.disabled = false;
-          btnSave.innerText = "บันทึกสินค้า (Cloud)";
+          btnSave.innerText = "บันทึกสินค้า";
         }
         closeProductModal();
       }
