@@ -152,20 +152,33 @@
   <div id="modal-payment" class="fixed inset-0 bg-black/30 backdrop-blur-sm hidden flex justify-center items-center z-50 p-4">
     <div class="bg-white rounded-3xl w-full max-w-sm p-6 text-center shadow-2xl relative border">
       <div class="bg-pastel-green -mx-6 -mt-6 p-4 text-white mb-4 rounded-t-3xl flex justify-between items-center">
-        <div><p class="text-[10px] tracking-widest uppercase opacity-80 text-left">PromptPay QR Code</p><p class="text-xs font-medium text-left">สแกนจ่ายได้ทุกแอปธนาคาร</p></div>
+        <div><p class="text-[10px] tracking-widest uppercase opacity-80 text-left">ชำระเงิน</p><p class="text-xs font-medium text-left">เลือกเงินสดหรือสแกนจ่าย</p></div>
         <button onclick="openManageAccountsModal()" class="bg-white/20 text-white text-[11px] px-2 py-1 rounded-xl"><i class="fa-solid fa-gear"></i> บัญชี</button>
       </div>
+      <div class="grid grid-cols-2 gap-2 mb-4">
+        <button id="method-promptpay" onclick="setPaymentMethod('promptpay')" class="border rounded-xl py-2 text-sm">PromptPay</button>
+        <button id="method-cash" onclick="setPaymentMethod('cash')" class="border rounded-xl py-2 text-sm">เงินสด</button>
+      </div>
+      <div class="bg-pastel-yellow/50 border border-pastel-yellow py-1.5 px-4 rounded-2xl mb-3"><span class="text-[11px] text-pastel-dark/70">ยอดชำระ</span><span id="pmt-amount" class="text-2xl font-extrabold text-emerald-700 block">฿0.00</span></div>
+      <div id="promptpay-payment">
       <div class="mb-3 text-left">
         <select id="acc-select-dropdown" onchange="changeActiveAccount(this.value)" class="w-full bg-slate-50 border text-pastel-dark text-xs font-semibold rounded-xl p-2"></select>
       </div>
-      <div class="bg-pastel-yellow/50 border border-pastel-yellow py-1.5 px-4 rounded-2xl mb-3"><span class="text-[11px] text-pastel-dark/70">ยอดชำระ</span><span id="pmt-amount" class="text-2xl font-extrabold text-emerald-700 block">฿0.00</span></div>
       <div class="p-2 border-2 border-slate-100 rounded-2xl bg-white mb-2 inline-block">
         <canvas id="qr-canvas" class="w-48 h-48 rounded-xl object-contain"></canvas>
       </div>
       <p class="text-xs text-slate-500 mb-3">ชื่อบัญชี: <strong id="pmt-acc-name" class="text-pastel-dark"></strong></p>
       <button type="button" id="btn-refresh-qr" onclick="refreshQRCode()" class="text-[11px] text-pastel-dark/70 font-medium mb-4 flex items-center justify-center gap-1.5 mx-auto bg-slate-50 px-3 py-1 rounded-lg border cursor-pointer hover:bg-slate-100 active:scale-95 transition"><i class="fa-solid fa-rotate-right"></i> สแกนไม่ได้? โหลด QR ใหม่</button>
+      </div>
+      <div id="cash-payment" class="hidden mb-4 text-left">
+        <label for="cash-received" class="block text-sm mb-2">รับเงินสด (บาท)</label>
+        <input id="cash-received" type="number" min="0" step="0.01" inputmode="decimal" oninput="updateCashChange()" class="w-full border rounded-xl p-3 text-xl" placeholder="0.00">
+        <button onclick="document.getElementById('cash-received').value = currentTotalAmount; updateCashChange()" class="bg-slate-100 rounded-xl px-3 py-2 text-xs mt-2">รับพอดี</button>
+        <p id="cash-message" class="text-xs text-rose-500 mt-2" aria-live="polite"></p>
+        <div class="flex justify-between bg-pastel-yellow/50 rounded-xl p-3 mt-3"><span>เงินทอน</span><strong id="cash-change" class="text-emerald-700" aria-live="polite">฿0.00</strong></div>
+      </div>
       <div class="space-y-2">
-        <button onclick="confirmPayment()" class="w-full bg-pastel-green text-white font-bold py-3 rounded-2xl shadow-md">ยืนยันรับเงิน</button>
+        <button id="btn-confirm-payment" onclick="confirmPayment()" class="w-full bg-pastel-green text-white font-bold py-3 rounded-2xl shadow-md disabled:opacity-50 disabled:cursor-not-allowed">ยืนยันรับเงิน</button>
         <button onclick="closePaymentModal()" class="w-full bg-slate-100 text-pastel-dark/70 font-semibold py-2 rounded-2xl text-xs">ย้อนกลับ</button>
       </div>
     </div>
@@ -431,13 +444,38 @@
       document.getElementById('btn-checkout').disabled = cart.length === 0;
     }
 
+    let paymentMethod = 'promptpay';
+    let savingPayment = false;
+    const money = amount => `฿${amount.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+    function setPaymentMethod(method) {
+      paymentMethod = method;
+      document.getElementById('promptpay-payment').classList.toggle('hidden', method !== 'promptpay');
+      document.getElementById('cash-payment').classList.toggle('hidden', method !== 'cash');
+      ['cash', 'promptpay'].forEach(m => {
+        document.getElementById('method-' + m).className = 'border rounded-xl py-2 text-sm ' + (m === method ? 'bg-pastel-green text-white' : 'bg-slate-50');
+      });
+      if (method === 'promptpay') refreshQRCode();
+      updateCashChange();
+    }
+
+    function updateCashChange() {
+      const input = document.getElementById('cash-received');
+      const received = Number(input.value);
+      const valid = input.value !== '' && input.validity.valid && Number.isFinite(received) && Math.round(received * 100) >= Math.round(currentTotalAmount * 100);
+      document.getElementById('cash-change').innerText = money(valid ? (Math.round(received * 100) - Math.round(currentTotalAmount * 100)) / 100 : 0);
+      document.getElementById('cash-message').innerText = valid ? '' : 'กรอกยอดรับเงินให้ครบยอดชำระ';
+      document.getElementById('btn-confirm-payment').disabled = savingPayment || (paymentMethod === 'cash' && !valid);
+    }
+
     function openPaymentModal() {
+      if (!cart.length || savingPayment) return;
       currentTotalAmount = cart.reduce((s,i)=>s+(i.price*i.qty),0);
       document.getElementById('pmt-amount').innerText = `฿${currentTotalAmount.toLocaleString('th-TH', {minimumFractionDigits: 2})}`;
       document.getElementById('pmt-acc-name').innerText = activeAccount.name;
       renderAccountDropdown();
-      qrRefreshToken = createQRReference();
-      generatePromptPayQR(currentTotalAmount, qrRefreshToken);
+      document.getElementById('cash-received').value = '';
+      setPaymentMethod('promptpay');
       document.getElementById('modal-payment').classList.remove('hidden');
     }
     function closePaymentModal() { document.getElementById('modal-payment').classList.add('hidden'); }
@@ -447,13 +485,21 @@
     }
 
     async function confirmPayment() {
-      let order = { id: 'ORD-' + Date.now().toString().slice(-6), timestamp: Date.now(), dateStr: new Date().toLocaleString('th-TH'), items: cart.map(i => ({ docId: i.docId, name: i.name, price: i.price, qty: i.qty, category: i.category || 'ทั่วไป' })), totalQty: cart.reduce((s,i)=>s+i.qty,0), totalAmount: currentTotalAmount, accountUsed: activeAccount.name, note: '' };
+      if (savingPayment || !cart.length) return;
+      updateCashChange();
+      if (document.getElementById('btn-confirm-payment').disabled) return;
+      const received = paymentMethod === 'cash' ? Number(document.getElementById('cash-received').value) : currentTotalAmount;
+      const change = (Math.round(received * 100) - Math.round(currentTotalAmount * 100)) / 100;
+      savingPayment = true;
+      updateCashChange();
+      let order = { id: 'ORD-' + Date.now().toString().slice(-6), timestamp: Date.now(), dateStr: new Date().toLocaleString('th-TH'), items: cart.map(i => ({ docId: i.docId, name: i.name, price: i.price, qty: i.qty, category: i.category || 'ทั่วไป' })), totalQty: cart.reduce((s,i)=>s+i.qty,0), totalAmount: currentTotalAmount, accountUsed: paymentMethod === 'cash' ? 'เงินสด' : activeAccount.name, paymentMethod, cashReceived: paymentMethod === 'cash' ? received : null, changeAmount: change, note: paymentMethod === 'cash' ? `เงินสด รับ ${money(received)} ทอน ${money(change)}` : 'PromptPay' };
       try {
         for(let i of cart) { let p = products.find(x => x.docId === i.docId); if(p) await window.fbUpdateDoc(window.fbDoc(window.db, "products", i.docId), { stock: Math.max(0, p.stock - i.qty) }); }
         await window.fbAddDoc(window.fbCollection(window.db, "salesHistory"), order);
-        if(CONFIG.GOOGLE_SHEET_WEBAPP_URL) fetch(CONFIG.GOOGLE_SHEET_WEBAPP_URL, { method: 'POST', mode: 'no-cors', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ timestamp: order.dateStr, id: order.id, items: order.items.map(i => `${i.name} (x${i.qty})`).join(', '), totalQty: order.totalQty, totalAmount: order.totalAmount, note: `[โอน:${order.accountUsed}]` }) });
-        alert('ชำระเงินสำเร็จ!'); closePaymentModal(); clearCart();
+        if(CONFIG.GOOGLE_SHEET_WEBAPP_URL) fetch(CONFIG.GOOGLE_SHEET_WEBAPP_URL, { method: 'POST', mode: 'no-cors', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ timestamp: order.dateStr, id: order.id, items: order.items.map(i => `${i.name} (x${i.qty})`).join(', '), totalQty: order.totalQty, totalAmount: order.totalAmount, note: order.paymentMethod === 'cash' ? order.note : `[โอน:${order.accountUsed}]` }) });
+        alert(paymentMethod === 'cash' ? `ชำระเงินสำเร็จ! เงินทอน ${money(change)}` : 'ชำระเงินสำเร็จ!'); closePaymentModal(); clearCart();
       } catch(e) { alert('ผิดพลาด: ' + e.message); }
+      finally { savingPayment = false; updateCashChange(); }
     }
 
     function renderInventoryTable() {
@@ -562,7 +608,7 @@
       document.getElementById('rpt-total-orders').innerText = ord;
       document.getElementById('rpt-total-items').innerText = `${itm} ชิ้น`;
       document.getElementById('sales-history-tbody').innerHTML = salesHistory.length === 0 ? `<tr><td colspan="6" class="text-center p-6 text-slate-300 text-xs">ไม่มีประวัติการขาย</td></tr>` : salesHistory.map(o => `
-        <tr class="border-b hover:bg-slate-50"><td class="p-3 text-slate-400 text-xs">${o.dateStr}</td><td class="p-3 font-mono text-xs font-bold">${o.id}</td><td class="p-3 text-xs">${o.items.map(i=>`${i.name} x${i.qty}`).join(', ')}</td><td class="p-3 text-center text-xs">${o.totalQty}</td><td class="p-3 text-right font-bold text-emerald-700 text-xs">฿${o.totalAmount.toLocaleString()}</td><td class="p-3 text-center"><button onclick="deleteOrder('${o.docId}')" class="text-rose-500 p-1"><i class="fa-solid fa-trash"></i></button></td></tr>
+        <tr class="border-b hover:bg-slate-50"><td class="p-3 text-slate-400 text-xs">${o.dateStr}</td><td class="p-3 font-mono text-xs font-bold">${o.id}<p class="font-normal mt-1">${o.paymentMethod === 'cash' ? 'เงินสด' : 'PromptPay'}</p></td><td class="p-3 text-xs">${o.items.map(i=>`${i.name} x${i.qty}`).join(', ')}</td><td class="p-3 text-center text-xs">${o.totalQty}</td><td class="p-3 text-right font-bold text-emerald-700 text-xs">฿${o.totalAmount.toLocaleString()}</td><td class="p-3 text-center"><button onclick="deleteOrder('${o.docId}')" class="text-rose-500 p-1"><i class="fa-solid fa-trash"></i></button></td></tr>
       `).join('');
       renderCharts();
     }
@@ -603,8 +649,8 @@
     }
     function exportToCSV() {
       if(salesHistory.length === 0) return alert('ไม่มีข้อมูล');
-      let csv = "data:text/csv;charset=utf-8,\uFEFFTimestamp,Order ID,Items,Total Qty,Amount\n";
-      salesHistory.forEach(o => { csv += `"${o.dateStr}","${o.id}","${o.items.map(i=>i.name).join(';')}",${o.totalQty},${o.totalAmount}\n`; });
+      let csv = "data:text/csv;charset=utf-8,\uFEFFTimestamp,Order ID,Items,Total Qty,Amount,Payment Method,Cash Received,Change\n";
+      salesHistory.forEach(o => { csv += `"${o.dateStr}","${o.id}","${o.items.map(i=>i.name).join(';')}",${o.totalQty},${o.totalAmount},${o.paymentMethod === 'cash' ? 'Cash' : 'PromptPay'},${o.cashReceived ?? ''},${o.changeAmount ?? ''}\n`; });
       let a = document.createElement("a"); a.href = encodeURI(csv); a.download = `sales.csv`; a.click();
     }
   </script>
