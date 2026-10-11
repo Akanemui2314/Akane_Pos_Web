@@ -274,6 +274,12 @@
             <input type="text" id="input-prod-category" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="category-options" aria-autocomplete="list" placeholder="เลือกหรือพิมพ์หมวดหมู่ใหม่" onfocus="renderCategoryOptions()" oninput="renderCategoryOptions()" onkeydown="handleCategoryKey(event)" class="w-full min-w-0 rounded-xl p-2.5 text-sm outline-none">
             <button type="button" aria-label="เลือกหมวดหมู่" onclick="document.getElementById('input-prod-category').focus(); renderCategoryOptions()" class="px-3 py-2 text-slate-400">▾</button>
           </div>
+          <div class="flex items-center gap-2 mt-2">
+            <label for="category-color-input" class="text-xs">สีแท็ก</label>
+            <input id="category-color-input" type="color" value="#FFE8CC" class="w-9 h-9 rounded cursor-pointer" aria-label="เลือกสีแท็ก">
+            <button id="save-category-color" type="button" onclick="saveCategoryColor()" class="px-3 py-2 bg-slate-100 rounded-xl text-xs disabled:opacity-50">บันทึกสี</button>
+            <span id="category-color-status" role="status" class="text-xs text-slate-500"></span>
+          </div>
           <div id="category-options" role="listbox" aria-label="หมวดหมู่" class="hidden mt-2 border border-slate-200 rounded-xl bg-slate-50 max-h-40 overflow-y-auto p-1 space-y-1"></div>
         </div>
       </div>
@@ -307,10 +313,41 @@
     const pillColors = ['bg-pastel-blue/60', 'bg-pastel-orange/60', 'bg-pastel-pink/60', 'bg-pastel-yellow', 'bg-pastel-purple/60'];
     const chartPastelColors = ['#A5D8FF', '#FFD8A8', '#FCC2D7', '#FFF3BF', '#EEB2ED', '#D8F5A2'];
 
-    function getCategoryColorClass(catName, allCategories) {
-      if (catName === 'ALL') return 'bg-pastel-green text-white shadow-sm';
-      const idx = allCategories.indexOf(catName);
-      return pillColors[idx >= 0 ? idx % pillColors.length : 0];
+    let categoryStyles = {};
+    const categoryPalette = ['#FFE8CC', '#FFD9E5', '#FFF3BF', '#F3D0F3', '#C9E9FF', '#D8F5A2'];
+    const defaultCategoryColors = { Acrylic: '#FFE8CC', Sticker: '#FFD9E5', StickerA6: '#FFF3BF', OCCard: '#F3D0F3' };
+    function getCategoryColor(name) {
+      const saved = categoryStyles[name];
+      if (/^#[0-9a-f]{6}$/i.test(saved || '')) return saved;
+      if (name === 'ALL') return '#84A98C';
+      if (defaultCategoryColors[name]) return defaultCategoryColors[name];
+      let hash = 0;
+      for (const char of name) hash = (hash * 31 + char.codePointAt(0)) >>> 0;
+      return categoryPalette[hash % categoryPalette.length];
+    }
+    function updateCategoryColorInput() {
+      const name = document.getElementById('input-prod-category').value.trim();
+      document.getElementById('category-color-input').value = getCategoryColor(name);
+    }
+    async function saveCategoryColor() {
+      const input = document.getElementById('input-prod-category');
+      let name = input.value.trim();
+      const status = document.getElementById('category-color-status');
+      if (!name) { status.textContent = 'เลือกหรือพิมพ์ชื่อหมวดหมู่ก่อน'; return; }
+      name = getProductCategories().find(c => c.toLowerCase() === name.toLowerCase()) || name;
+      const color = document.getElementById('category-color-input').value;
+      const button = document.getElementById('save-category-color');
+      button.disabled = true;
+      try {
+        if (!window.db) throw new Error('ยังเชื่อมต่อฐานข้อมูลไม่สำเร็จ');
+        await window.fbSetDoc(window.fbDoc(window.db, 'categoryColors', encodeURIComponent(name)), { name, color });
+        categoryStyles[name] = color;
+        input.value = name;
+        status.textContent = 'บันทึกสีแล้ว';
+        renderPOSProducts();
+        renderCategoryOptions();
+      } catch (error) { status.textContent = 'บันทึกสีไม่สำเร็จ: ' + error.message; }
+      finally { button.disabled = false; }
     }
 
     function updateCropPositionSmooth(val) {
@@ -428,6 +465,13 @@
         if (!window.db || dataStarted) return;
         dataStarted = true;
         renderCart();
+        window.fbOnSnapshot(window.fbCollection(window.db, 'categoryColors'), snap => {
+          categoryStyles = {};
+          snap.forEach(d => { const data = d.data(); if (typeof data.name === 'string' && /^#[0-9a-f]{6}$/i.test(data.color || '')) categoryStyles[data.name] = data.color; });
+          renderPOSProducts();
+          updateCategoryColorInput();
+          if (!document.getElementById('category-options').classList.contains('hidden')) renderCategoryOptions();
+        }, error => { console.error('Category colors:', error); document.getElementById('category-color-status').textContent = 'โหลดสีไม่สำเร็จ'; });
         document.getElementById('pos-product-grid').innerHTML = '<div class="col-span-full text-center py-8 text-sm">กำลังโหลดสินค้า…</div>';
         window.fbOnSnapshot(window.fbCollection(window.db, "products"), snap => {
           products = []; snap.forEach(d => products.push({ docId: d.id, ...d.data() }));
@@ -462,12 +506,12 @@
 
     function renderPOSProducts() {
       const grid = document.getElementById('pos-product-grid'), search = document.getElementById('search-pos').value.toLowerCase();
-      const categories = ['ALL', ...new Set(products.map(p => p.category || 'ทั่วไป'))];
+      const categories = ['ALL', ...getProductCategories()];
       
       document.getElementById('category-pills').innerHTML = categories.map(cat => {
         const isSelected = currentCategory === cat;
-        const colorClass = isSelected ? 'bg-pastel-green text-white shadow-sm' : `${getCategoryColorClass(cat, categories)} text-pastel-dark hover:opacity-80`;
-        return `<button onclick="currentCategory='${cat}';renderPOSProducts()" class="px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition ${colorClass}">${cat}</button>`;
+        const colorClass = (cat === 'ALL' ? 'text-white ' : 'text-pastel-dark ') + (isSelected ? 'ring-2 ring-pastel-green ring-offset-2 shadow-sm' : 'hover:opacity-80');
+        return `<button onclick="currentCategory='${cat}';renderPOSProducts()" style="background-color:${getCategoryColor(cat)}" class="px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition ${colorClass}">${cat}</button>`;
       }).join('');
       
       const filtered = products.filter(p => p.name.toLowerCase().includes(search) && (currentCategory === 'ALL' || (p.category || 'ทั่วไป') === currentCategory));
@@ -594,7 +638,7 @@
     let extraCategories = [];
     let categoryOptionIndex = -1;
     function getProductCategories() {
-      return [...new Set([...products.map(p => p.category || 'ทั่วไป'), ...extraCategories])];
+      return [...new Set([...products.map(p => p.category || 'ทั่วไป'), ...extraCategories, ...Object.keys(categoryStyles)])];
     }
     function closeCategoryOptions() {
       document.getElementById('category-options').classList.add('hidden');
@@ -604,12 +648,15 @@
     function chooseCategory(category) {
       document.getElementById('input-prod-category').value = category;
       if (!getProductCategories().includes(category)) extraCategories.push(category);
+      updateCategoryColorInput();
+      document.getElementById('category-color-status').textContent = '';
       closeCategoryOptions();
     }
     function renderCategoryOptions() {
       const input = document.getElementById('input-prod-category');
       const list = document.getElementById('category-options');
       const query = input.value.trim();
+      updateCategoryColorInput();
       const categories = getProductCategories();
       list.replaceChildren();
       categoryOptionIndex = -1;
@@ -620,7 +667,8 @@
         button.setAttribute('aria-selected', 'false');
         button.className = 'block w-full text-left rounded-lg px-3 py-2 text-sm hover:bg-pastel-lightgreen';
         const tag = document.createElement('span');
-        tag.className = 'inline-block bg-pastel-purple/60 rounded-md px-2 py-0.5';
+        tag.className = 'inline-block rounded-md px-2 py-0.5';
+        tag.style.backgroundColor = getCategoryColor(name);
         tag.textContent = name;
         if (create) button.append('＋ เพิ่มหมวดหมู่ใหม่ ');
         button.append(tag);
@@ -709,6 +757,8 @@
       } else {
         document.getElementById('modal-prod-title').innerText = 'เพิ่มสินค้าใหม่';
       }
+      updateCategoryColorInput();
+      document.getElementById('category-color-status').textContent = '';
       document.getElementById('modal-product').classList.remove('hidden');
     }
 
