@@ -81,6 +81,8 @@
       #cart-items-container { min-height: 0; max-height: none; overscroll-behavior: contain; }
       #cart-footer { padding-bottom: max(1.25rem, env(safe-area-inset-bottom)); }
     }
+    button { touch-action: manipulation; }
+    #cash-received { font-size: 20px; user-select: text; }
     #modal-payment { overflow-y: auto; }
     #modal-payment > div { max-height: calc(100dvh - 2rem); overflow-y: auto; }
   </style>
@@ -171,7 +173,7 @@
   </div>
 
   <!-- MODAL PAYMENT -->
-  <div id="modal-payment" class="fixed inset-0 bg-black/30 backdrop-blur-sm hidden flex justify-center items-center z-50 p-4">
+  <div id="modal-payment" onclick="if (event.target === this) closePaymentModal()" class="fixed inset-0 bg-black/30 backdrop-blur-sm hidden flex justify-center items-center z-50 p-4">
     <div class="bg-white rounded-3xl w-full max-w-sm p-6 text-center shadow-2xl relative border">
       <div class="bg-pastel-green -mx-6 -mt-6 p-4 text-white mb-4 rounded-t-3xl flex justify-between items-center">
         <div><p class="text-[10px] tracking-widest uppercase opacity-80 text-left">ชำระเงิน</p><p class="text-xs font-medium text-left">เลือกเงินสดหรือสแกนจ่าย</p></div>
@@ -194,9 +196,9 @@
       </div>
       <div id="cash-payment" class="hidden mb-4 text-left">
         <label for="cash-received" class="block text-sm mb-2">รับเงินสด (บาท)</label>
-        <input id="cash-received" type="text" readonly inputmode="none" autocomplete="off" oninput="updateCashChange()" class="w-full border rounded-xl p-3 text-xl" placeholder="0.00">
+        <input id="cash-received" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]{0,2}" autocomplete="off" oninput="updateCashChange()" class="w-full border rounded-xl p-3 text-xl" placeholder="0.00">
         <button onclick="document.getElementById('cash-received').value = currentTotalAmount; updateCashChange()" class="bg-slate-100 rounded-xl px-3 py-2 text-xs mt-2">รับพอดี</button>
-<div class="grid grid-cols-3 gap-2 mt-3" aria-label="แป้นตัวเลขรับเงินสด"><button type="button" onclick="pressCashKey('1')" class="bg-slate-50 border rounded-xl py-3 text-xl font-semibold active:bg-pastel-lightgreen">1</button><button type="button" onclick="pressCashKey('2')" class="bg-slate-50 border rounded-xl py-3 text-xl font-semibold active:bg-pastel-lightgreen">2</button><button type="button" onclick="pressCashKey('3')" class="bg-slate-50 border rounded-xl py-3 text-xl font-semibold active:bg-pastel-lightgreen">3</button><button type="button" onclick="pressCashKey('4')" class="bg-slate-50 border rounded-xl py-3 text-xl font-semibold active:bg-pastel-lightgreen">4</button><button type="button" onclick="pressCashKey('5')" class="bg-slate-50 border rounded-xl py-3 text-xl font-semibold active:bg-pastel-lightgreen">5</button><button type="button" onclick="pressCashKey('6')" class="bg-slate-50 border rounded-xl py-3 text-xl font-semibold active:bg-pastel-lightgreen">6</button><button type="button" onclick="pressCashKey('7')" class="bg-slate-50 border rounded-xl py-3 text-xl font-semibold active:bg-pastel-lightgreen">7</button><button type="button" onclick="pressCashKey('8')" class="bg-slate-50 border rounded-xl py-3 text-xl font-semibold active:bg-pastel-lightgreen">8</button><button type="button" onclick="pressCashKey('9')" class="bg-slate-50 border rounded-xl py-3 text-xl font-semibold active:bg-pastel-lightgreen">9</button><button type="button" onclick="pressCashKey('.')" class="bg-slate-50 border rounded-xl py-3 text-xl font-semibold active:bg-pastel-lightgreen">.</button><button type="button" onclick="pressCashKey('0')" class="bg-slate-50 border rounded-xl py-3 text-xl font-semibold active:bg-pastel-lightgreen">0</button><button type="button" onclick="pressCashKey('⌫')" class="bg-slate-50 border rounded-xl py-3 text-xl font-semibold active:bg-pastel-lightgreen">⌫</button></div><button type="button" onclick="pressCashKey('clear')" class="text-rose-500 text-xs mt-2 px-3 py-2">ล้างตัวเลข</button>
+
         <p id="cash-message" class="text-xs text-rose-500 mt-2" aria-live="polite"></p>
         <div class="flex justify-between bg-pastel-yellow/50 rounded-xl p-3 mt-3"><span>เงินทอน</span><strong id="cash-change" class="text-emerald-700" aria-live="polite">฿0.00</strong></div>
       </div>
@@ -499,18 +501,6 @@
       updateCashChange();
     }
 
-    function pressCashKey(key) {
-      if (savingPayment) return;
-      const input = document.getElementById('cash-received');
-      let value = input.value;
-      if (key === 'clear') value = '';
-      else if (key === '⌫') value = value.slice(0, -1);
-      else if (key === '.') { if (!value.includes('.')) value = (value || '0') + '.'; }
-      else if (value.length < 12 && (!value.includes('.') || value.split('.')[1].length < 2)) value = value === '0' ? key : value + key;
-      input.value = value;
-      updateCashChange();
-    }
-
     function updateCashChange() {
       const input = document.getElementById('cash-received');
       const received = Number(input.value);
@@ -530,7 +520,12 @@
       setPaymentMethod('promptpay');
       document.getElementById('modal-payment').classList.remove('hidden');
     }
-    function closePaymentModal() { document.getElementById('modal-payment').classList.add('hidden'); }
+    function closePaymentModal() {
+      if (savingPayment) return;
+      document.getElementById('cash-received').blur();
+      document.getElementById('modal-payment').classList.add('hidden');
+    }
+    document.addEventListener('keydown', event => { if (event.key === 'Escape') closePaymentModal(); });
     function refreshQRCode() {
       qrRefreshToken = createQRReference();
       generatePromptPayQR(currentTotalAmount, qrRefreshToken);
