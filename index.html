@@ -505,6 +505,11 @@
         if (!window.db || dataStarted) return;
         dataStarted = true;
         renderCart();
+        window.fbOnSnapshot(window.fbCollection(window.db, 'sellerColors'), snap => {
+          sellerStyles = {};
+          snap.forEach(d => { const data = d.data(); if (typeof data.name === 'string' && /^#[0-9a-f]{6}$/i.test(data.color || '')) sellerStyles[data.name] = data.color; });
+          document.querySelectorAll('[data-seller-name]').forEach(el => styleSellerBubble(el, el.dataset.sellerName));
+        }, error => console.error('Seller colors:', error));
         window.fbOnSnapshot(window.fbCollection(window.db, 'categoryColors'), snap => {
           categoryStyles = {};
           snap.forEach(d => { const data = d.data(); if (typeof data.name === 'string' && /^#[0-9a-f]{6}$/i.test(data.color || '')) categoryStyles[data.name] = data.color; });
@@ -548,6 +553,19 @@
     function getPeople() {
       return [...new Set(products.map(p => (p.person || '').trim()).filter(Boolean))].sort((a,b) => a.localeCompare(b, 'th'));
     }
+    let sellerStyles = {};
+    function getSellerColor(name) { return /^#[0-9a-f]{6}$/i.test(sellerStyles[name] || '') ? sellerStyles[name] : '#C9E9FF'; }
+    function styleSellerBubble(el, name) {
+      const color = getSellerColor(name); el.style.backgroundColor = color;
+      const rgb = color.slice(1).match(/../g).map(n => parseInt(n, 16));
+      el.style.color = (rgb[0]*299 + rgb[1]*587 + rgb[2]*114)/1000 < 145 ? '#FFFFFF' : '#3D513D';
+    }
+    async function saveSellerColor(name, color) {
+      if (!/^#[0-9a-f]{6}$/i.test(color)) throw new Error('สีไม่ถูกต้อง');
+      await window.fbSetDoc(window.fbDoc(window.db, 'sellerColors', encodeURIComponent(name)), { name, color });
+      sellerStyles[name] = color;
+      document.querySelectorAll('[data-seller-name]').forEach(el => styleSellerBubble(el, el.dataset.sellerName));
+    }
     let extraSellers = [];
     function sellerNames() { return [...new Set([...getPeople(), ...extraSellers])]; }
     function canonicalSeller(name) {
@@ -565,6 +583,7 @@
         const bubble = document.createElement('span');
         bubble.className = 'inline-block rounded-full px-3 py-1 bg-pastel-blue/60';
         bubble.textContent = label || name;
+        bubble.dataset.sellerName = name; styleSellerBubble(bubble, name);
         button.append(bubble);
         button.onclick = () => choose(name);
         const row = document.createElement('div'); row.className = 'flex items-center';
@@ -581,7 +600,15 @@
             catch (error) { alert('เปลี่ยนชื่อไม่สำเร็จ: ' + error.message); }
             finally { edit.disabled = false; }
           };
-          row.append(edit);
+          const color = document.createElement('input'); color.type = 'color'; color.value = getSellerColor(name);
+          color.className = 'w-7 h-7 shrink-0 cursor-pointer'; color.setAttribute('aria-label', 'สีผู้ขาย ' + name);
+          color.onchange = async () => {
+            color.disabled = true;
+            try { await saveSellerColor(name, color.value); }
+            catch (error) { color.value = getSellerColor(name); alert('บันทึกสีไม่สำเร็จ: ' + error.message); }
+            finally { color.disabled = false; }
+          };
+          row.append(color, edit);
         }
         list.append(row);
       }
@@ -614,12 +641,14 @@
       try {
         const snapshot = await window.fbGetDocs(window.fbCollection(window.db, 'products'));
         const matches = snapshot.docs.filter(d => (d.data().person || '').trim() === oldName);
-        if (matches.length > 500) throw new Error('มีสินค้ามากเกินกว่าจะเปลี่ยนชื่อพร้อมกัน');
+        if (matches.length > 499) throw new Error('มีสินค้ามากเกินกว่าจะเปลี่ยนชื่อพร้อมกัน');
         if (matches.length) {
           const batch = window.fbWriteBatch(window.db);
           matches.forEach(d => batch.update(d.ref, { person: name }));
+          batch.set(window.fbDoc(window.db, 'sellerColors', encodeURIComponent(name)), { name, color: getSellerColor(oldName) });
           await batch.commit();
         }
+        sellerStyles[name] = getSellerColor(oldName);
         extraSellers = extraSellers.filter(n => n !== oldName);
         if (!extraSellers.includes(name)) extraSellers.push(name);
         products.forEach(p => { if ((p.person || '').trim() === oldName) p.person = name; });
@@ -640,6 +669,7 @@
         bubble.type = 'button';
         bubble.className = 'rounded-full bg-pastel-blue/60 px-3 py-1.5 text-xs whitespace-nowrap';
         bubble.textContent = product.person || '+ ผู้ขาย';
+        bubble.dataset.sellerName = product.person || ''; styleSellerBubble(bubble, product.person || '');
         bubble.onclick = () => {
           const existing = cell.querySelector('[data-seller-menu]');
           if (existing) { existing.remove(); return; }
@@ -685,6 +715,8 @@
         button.type = 'button';
         button.textContent = name || 'ทุกคน';
         button.className = 'px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap ' + (currentPerson === name ? 'bg-pastel-green text-white' : 'bg-slate-100 text-pastel-dark');
+        if (name) { button.dataset.sellerName = name; styleSellerBubble(button, name); }
+        if (currentPerson === name) button.style.outline = '2px solid #84A98C';
         button.onclick = () => { currentPerson = name; renderPOSProducts(); };
         list.append(button);
       });
