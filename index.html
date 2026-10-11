@@ -248,7 +248,7 @@
           <label class="block text-xs font-semibold text-pastel-dark/70 mb-1">รูปภาพสินค้า & ปรับตำแหน่งโฟกัส</label>
           <div class="flex flex-col gap-3">
             <div class="flex items-center gap-4">
-              <div class="w-24 h-24 border-2 border-dashed border-slate-200 rounded-2xl overflow-hidden bg-slate-100 flex items-center justify-center relative">
+              <div class="w-48 aspect-[3/2] shrink-0 border-2 border-dashed border-slate-200 rounded-2xl overflow-hidden bg-slate-100 flex items-center justify-center relative">
                 <img id="img-preview" src="" class="w-full h-full object-cover hidden">
                 <i id="img-placeholder-icon" class="fa-regular fa-image text-2xl text-slate-300"></i>
               </div>
@@ -260,6 +260,9 @@
             <div id="reposition-control" class="hidden bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1.5">
               <div class="flex justify-between text-[11px] font-semibold text-pastel-dark"><span><i class="fa-solid fa-arrows-up-down text-pastel-green"></i> เลื่อนตำแหน่งแนวตั้ง (Vertical Focus)</span><span id="crop-pos-val" class="text-slate-500 font-mono">15%</span></div>
               <input type="range" id="crop-pos-slider" min="0" max="100" value="15" oninput="updateCropPositionSmooth(this.value)" class="w-full accent-pastel-green cursor-pointer">
+              <div class="flex justify-between text-[11px] font-semibold"><label for="crop-zoom-slider">ซูมรูปเพื่อครอป</label><span id="crop-zoom-val">125%</span></div>
+              <input type="range" id="crop-zoom-slider" min="100" max="250" value="125" oninput="updateCropZoom(this.value)" class="w-full accent-pastel-green cursor-pointer">
+              <p class="text-[10px] text-slate-500">ถ้าเลื่อนแล้วรูปไม่ขยับ ให้เพิ่มซูมก่อน แล้วเลื่อนตำแหน่งแนวตั้ง</p>
             </div>
           </div>
         </div>
@@ -350,17 +353,24 @@
       finally { button.disabled = false; }
     }
 
+    let currentImageZoom = 1.25;
+    function cropImageStyle(focusY, zoom = 1) {
+      const y = Math.max(0, Math.min(100, Number(focusY) || 0));
+      const scale = Math.max(1, Math.min(2.5, Number(zoom) || 1));
+      return `object-position: center ${y}%; transform: scale(${scale}); transform-origin: center ${y}%;`;
+    }
+    function updateCropPreview() {
+      document.getElementById('crop-pos-val').innerText = `${currentFocusY}%`;
+      document.getElementById('crop-zoom-val').innerText = `${Math.round(currentImageZoom * 100)}%`;
+      document.getElementById('img-preview').style.cssText = cropImageStyle(currentFocusY, currentImageZoom);
+    }
     function updateCropPositionSmooth(val) {
-      currentFocusY = val;
-      if (!isTicking) {
-        window.requestAnimationFrame(() => {
-          document.getElementById('crop-pos-val').innerText = `${currentFocusY}%`;
-          const imgPreview = document.getElementById('img-preview');
-          if (imgPreview) imgPreview.style.objectPosition = `center ${currentFocusY}%`;
-          isTicking = false;
-        });
-        isTicking = true;
-      }
+      currentFocusY = Number(val);
+      updateCropPreview();
+    }
+    function updateCropZoom(val) {
+      currentImageZoom = Number(val) / 100;
+      updateCropPreview();
     }
 
     function handleImageUpload(event) {
@@ -384,7 +394,7 @@
           
           const imgPreview = document.getElementById('img-preview');
           imgPreview.src = currentImageBase64;
-          imgPreview.style.objectPosition = `center ${currentFocusY}%`;
+          updateCropPreview();
           imgPreview.classList.remove('hidden');
           document.getElementById('img-placeholder-icon').classList.add('hidden');
           document.getElementById('reposition-control').classList.remove('hidden');
@@ -519,8 +529,8 @@
         const posY = p.focusY !== undefined ? p.focusY : 15;
         return `
           <div onclick="addToCart('${p.docId}')" class="bg-white rounded-2xl border p-3 shadow-sm cursor-pointer hover:border-pastel-green transition flex flex-col justify-between relative group">
-            <span class="absolute top-2 right-2 px-2 py-0.5 rounded-lg text-[10px] font-bold ${p.stock > 0 ? 'bg-pastel-green text-white' : 'bg-rose-500 text-white'}">${p.stock > 0 ? `เหลือ ${p.stock}` : 'หมด'}</span>
-            <div class="h-40 bg-slate-100 rounded-xl overflow-hidden flex items-center justify-center mb-2">${p.image ? `<img src="${p.image}" style="object-position: center ${posY}%;" class="w-full h-full object-cover">` : '<i class="fa-regular fa-image text-2xl text-slate-300"></i>'}</div>
+            <span class="absolute z-10 top-2 right-2 px-2 py-0.5 rounded-lg text-[10px] font-bold ${p.stock > 0 ? 'bg-pastel-green text-white' : 'bg-rose-500 text-white'}">${p.stock > 0 ? `เหลือ ${p.stock}` : 'หมด'}</span>
+            <div class="aspect-[3/2] bg-slate-100 rounded-xl overflow-hidden flex items-center justify-center mb-2">${p.image ? `<img src="${p.image}" style="${cropImageStyle(posY, p.imageZoom || 1)}" class="w-full h-full object-cover">` : '<i class="fa-regular fa-image text-2xl text-slate-300"></i>'}</div>
             <p class="font-semibold text-xs truncate">${p.name}</p>
             <div class="flex justify-between items-center mt-1"><span class="text-emerald-700 font-bold text-sm">฿${p.price.toLocaleString()}</span><i class="fa-solid fa-plus bg-pastel-lightgreen p-1.5 rounded-lg text-xs"></i></div>
           </div>
@@ -630,7 +640,7 @@
       document.getElementById('inventory-table-body').innerHTML = products.map(p => {
         const posY = p.focusY !== undefined ? p.focusY : 15;
         return `
-          <tr class="border-b hover:bg-slate-50"><td class="p-3"><div class="w-12 h-12 bg-slate-100 rounded-xl overflow-hidden flex items-center justify-center">${p.image?`<img src="${p.image}" style="object-position: center ${posY}%;" class="w-full h-full object-cover">`:'<i class="fa-regular fa-image text-slate-300"></i>'}</div></td><td class="p-3 font-semibold">${p.name}</td><td class="p-3 text-xs">${p.category||'ทั่วไป'}</td><td class="p-3 text-right font-bold">฿${p.price}</td><td class="p-3 text-center"><span class="px-2 py-1 rounded text-xs font-bold ${p.stock>0?'bg-pastel-lightgreen':'bg-rose-100 text-rose-700'}">${p.stock}</span></td><td class="p-3 text-center"><button onclick="openProductModal('${p.docId}')" class="text-pastel-green p-1"><i class="fa-solid fa-pen"></i></button><button onclick="deleteProduct('${p.docId}')" class="text-rose-500 p-1 ml-2"><i class="fa-solid fa-trash"></i></button></td></tr>
+          <tr class="border-b hover:bg-slate-50"><td class="p-3"><div class="w-16 aspect-[3/2] bg-slate-100 rounded-xl overflow-hidden flex items-center justify-center">${p.image?`<img src="${p.image}" style="${cropImageStyle(posY, p.imageZoom || 1)}" class="w-full h-full object-cover">`:'<i class="fa-regular fa-image text-slate-300"></i>'}</div></td><td class="p-3 font-semibold">${p.name}</td><td class="p-3 text-xs">${p.category||'ทั่วไป'}</td><td class="p-3 text-right font-bold">฿${p.price}</td><td class="p-3 text-center"><span class="px-2 py-1 rounded text-xs font-bold ${p.stock>0?'bg-pastel-lightgreen':'bg-rose-100 text-rose-700'}">${p.stock}</span></td><td class="p-3 text-center"><button onclick="openProductModal('${p.docId}')" class="text-pastel-green p-1"><i class="fa-solid fa-pen"></i></button><button onclick="deleteProduct('${p.docId}')" class="text-rose-500 p-1 ml-2"><i class="fa-solid fa-trash"></i></button></td></tr>
         `;
       }).join('');
     }
@@ -718,7 +728,9 @@
 
     function openProductModal(editDocId = null) {
       closeCategoryOptions();
-      currentImageBase64 = ''; currentFocusY = 15;
+      currentImageBase64 = ''; currentFocusY = 15; currentImageZoom = 1.25;
+      document.getElementById('crop-zoom-slider').value = 125;
+      updateCropPreview();
       document.getElementById('crop-pos-slider').value = 15;
       document.getElementById('crop-pos-val').innerText = '15%';
       document.getElementById('edit-prod-id').value = '';
@@ -739,6 +751,8 @@
           document.getElementById('input-prod-price').value = p.price;
           document.getElementById('input-prod-stock').value = p.stock;
           document.getElementById('input-prod-category').value = p.category || '';
+          currentImageZoom = p.imageZoom || 1;
+          document.getElementById('crop-zoom-slider').value = currentImageZoom * 100;
           if (p.focusY !== undefined) {
             currentFocusY = p.focusY;
             document.getElementById('crop-pos-slider').value = p.focusY;
@@ -748,7 +762,7 @@
             currentImageBase64 = p.image;
             const imgPreview = document.getElementById('img-preview');
             imgPreview.src = p.image;
-            imgPreview.style.objectPosition = `center ${currentFocusY}%`;
+            updateCropPreview();
             imgPreview.classList.remove('hidden');
             document.getElementById('img-placeholder-icon').classList.add('hidden');
             document.getElementById('reposition-control').classList.remove('hidden');
@@ -775,7 +789,7 @@
       if (!name || isNaN(price)) return alert('กรอกชื่อและราคาให้ถูกต้อง');
 
       try {
-        let data = { name, price, stock, category, focusY: currentFocusY };
+        let data = { name, price, stock, category, focusY: Number(currentFocusY), imageZoom: currentImageZoom };
         if (currentImageBase64) data.image = currentImageBase64;
 
         if (id) await window.fbUpdateDoc(window.fbDoc(window.db, "products", id), data);
