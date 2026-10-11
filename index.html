@@ -83,8 +83,17 @@
     }
     button { touch-action: manipulation; }
     #cash-received { font-size: 20px; user-select: text; }
-    #modal-payment { overflow-y: auto; }
-    #modal-payment > div { max-height: calc(100dvh - 2rem); overflow-y: auto; }
+    #modal-payment {
+      top: var(--viewport-top, 0px); bottom: auto;
+      height: var(--app-height, 100dvh); box-sizing: border-box;
+      overflow: hidden;
+    }
+    #modal-payment > div {
+      box-sizing: border-box; min-height: 0;
+      max-height: calc(var(--app-height, 100dvh) - 2rem);
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
+      touch-action: pan-y; overscroll-behavior-y: contain;
+    }
   </style>
 </head>
 
@@ -196,7 +205,7 @@
       </div>
       <div id="cash-payment" class="hidden mb-4 text-left">
         <label for="cash-received" class="block text-sm mb-2">รับเงินสด (บาท)</label>
-        <input id="cash-received" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]{0,2}" autocomplete="off" oninput="updateCashChange()" class="w-full border rounded-xl p-3 text-xl" placeholder="0.00">
+        <input id="cash-received" type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]{0,2}" autocomplete="off" oninput="sanitizeCashInput(this); updateCashChange()" class="w-full border rounded-xl p-3 text-xl" placeholder="0.00">
         <button onclick="document.getElementById('cash-received').value = currentTotalAmount; updateCashChange()" class="bg-slate-100 rounded-xl px-3 py-2 text-xs mt-2">รับพอดี</button>
 
         <p id="cash-message" class="text-xs text-rose-500 mt-2" aria-live="polite"></p>
@@ -385,11 +394,19 @@
     }
 
     function resizeApp() {
-      document.documentElement.style.setProperty('--app-height', (window.visualViewport ? window.visualViewport.height : window.innerHeight) + 'px');
+      const viewport = window.visualViewport;
+      document.documentElement.style.setProperty('--app-height', (viewport ? viewport.height : window.innerHeight) + 'px');
+      document.documentElement.style.setProperty('--viewport-top', (viewport ? viewport.offsetTop : 0) + 'px');
+      if (document.activeElement && document.activeElement.id === 'cash-received') {
+        requestAnimationFrame(() => document.activeElement.id === 'cash-received' && document.activeElement.scrollIntoView({ block: 'nearest' }));
+      }
     }
     resizeApp();
     window.addEventListener('resize', resizeApp);
-    if (window.visualViewport) window.visualViewport.addEventListener('resize', resizeApp);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', resizeApp);
+      window.visualViewport.addEventListener('scroll', resizeApp);
+    }
 
     let dataStarted = false;
     function showDataError(error) {
@@ -499,6 +516,11 @@
       });
       if (method === 'promptpay') refreshQRCode();
       updateCashChange();
+    }
+
+    function sanitizeCashInput(input) {
+      const parts = input.value.replace(/[^0-9.]/g, '').split('.');
+      input.value = parts[0] + (parts.length > 1 ? '.' + parts.slice(1).join('').slice(0, 2) : '');
     }
 
     function updateCashChange() {
