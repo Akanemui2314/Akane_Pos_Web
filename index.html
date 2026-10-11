@@ -239,7 +239,7 @@
   </div>
 
   <!-- MODAL PRODUCT (มีอัปโหลดรูปและครอปโฟกัส) -->
-  <div id="modal-product" class="fixed inset-0 bg-black/30 hidden flex justify-center items-center z-50 p-4 overflow-y-auto">
+  <div id="modal-product" onclick="if (event.target === this) closeProductModal()" class="fixed inset-0 bg-black/30 hidden flex justify-center items-center z-50 p-4 overflow-y-auto">
     <div class="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl relative border my-auto">
       <h3 id="modal-prod-title" class="text-lg font-bold text-pastel-dark mb-4">เพิ่มสินค้าใหม่</h3>
       <input type="hidden" id="edit-prod-id">
@@ -261,8 +261,8 @@
               <div class="flex justify-between text-[11px] font-semibold text-pastel-dark"><span><i class="fa-solid fa-arrows-up-down text-pastel-green"></i> เลื่อนตำแหน่งแนวตั้ง (Vertical Focus)</span><span id="crop-pos-val" class="text-slate-500 font-mono">15%</span></div>
               <input type="range" id="crop-pos-slider" min="0" max="100" value="15" oninput="updateCropPositionSmooth(this.value)" class="w-full accent-pastel-green cursor-pointer">
               <div class="flex justify-between text-[11px] font-semibold"><label for="crop-zoom-slider">ซูมรูปเพื่อครอป</label><span id="crop-zoom-val">125%</span></div>
-              <input type="range" id="crop-zoom-slider" min="100" max="250" value="125" oninput="updateCropZoom(this.value)" class="w-full accent-pastel-green cursor-pointer">
-              <p class="text-[10px] text-slate-500">ถ้าเลื่อนแล้วรูปไม่ขยับ ให้เพิ่มซูมก่อน แล้วเลื่อนตำแหน่งแนวตั้ง</p>
+              <input type="range" id="crop-zoom-slider" min="25" max="250" value="125" oninput="updateCropZoom(this.value)" class="w-full accent-pastel-green cursor-pointer">
+              <p class="text-[10px] text-slate-500">ซูมออกเพื่อเห็นรูปเต็ม หรือซูมเข้าแล้วเลื่อนเพื่อเลือกส่วนที่ต้องการ</p>
             </div>
           </div>
         </div>
@@ -356,8 +356,8 @@
     let currentImageZoom = 1.25;
     function cropImageStyle(focusY, zoom = 1) {
       const y = Math.max(0, Math.min(100, Number(focusY) || 0));
-      const scale = Math.max(1, Math.min(2.5, Number(zoom) || 1));
-      return `object-position: center ${y}%; transform: scale(${scale}); transform-origin: center ${y}%;`;
+      const scale = Math.max(0.25, Math.min(2.5, Number(zoom) || 1));
+      return `object-fit: ${scale < 1 ? 'contain' : 'cover'}; object-position: center ${y}%; transform: scale(${scale}); transform-origin: center ${y}%;`;
     }
     function updateCropPreview() {
       document.getElementById('crop-pos-val').innerText = `${currentFocusY}%`;
