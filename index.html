@@ -24,10 +24,13 @@
 
   <!-- Firebase SDK (v10.x) -->
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { 
-      getFirestore, collection, onSnapshot, doc, setDoc, addDoc, deleteDoc, updateDoc, getDocs 
-    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    try {
+    const [appSDK, firestoreSDK] = await Promise.all([
+      import("https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js"),
+      import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js")
+    ]);
+    const { initializeApp } = appSDK;
+    const { getFirestore, collection, onSnapshot, doc, setDoc, addDoc, deleteDoc, updateDoc, getDocs } = firestoreSDK;
 
     const db = getFirestore(initializeApp({
       apiKey: "AIzaSyBDJ--m-bsQvyWpwTUlKe-lc9pvuMtAN7k",
@@ -48,6 +51,11 @@
     window.fbDeleteDoc = deleteDoc;
     window.fbUpdateDoc = updateDoc;
     window.fbGetDocs = getDocs;
+    window.dispatchEvent(new Event('firebase-ready'));
+    } catch (error) {
+      window.firebaseLoadError = error;
+      window.dispatchEvent(new Event('firebase-error'));
+    }
   </script>
 
   <script>
@@ -65,7 +73,7 @@
     /* Tablet: keep checkout visible while each list scrolls independently. */
     @media (min-width: 768px) {
       html, body { height: 100%; overflow: hidden; }
-      body { height: 100vh; height: 100dvh; min-height: 0; }
+      body { height: var(--app-height, 100dvh); min-height: 0; }
       #app-main { height: 100%; min-height: 0; min-width: 0; overflow: hidden; }
       #app-main > header { flex-shrink: 0; }
       #app-main > main { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
@@ -374,13 +382,27 @@
       new QRious({ element: document.getElementById('qr-canvas'), value: payload, size: 250, level: 'M' });
     }
 
-    window.addEventListener('load', () => {
-      setTimeout(() => {
-        if (!window.db) return;
+    function resizeApp() {
+      document.documentElement.style.setProperty('--app-height', (window.visualViewport ? window.visualViewport.height : window.innerHeight) + 'px');
+    }
+    resizeApp();
+    window.addEventListener('resize', resizeApp);
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', resizeApp);
+
+    let dataStarted = false;
+    function showDataError(error) {
+      console.error('Firebase:', error);
+      document.getElementById('pos-product-grid').innerHTML = '<div class="col-span-full text-center py-8 text-sm text-rose-500">โหลดข้อมูลไม่สำเร็จ ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่ <button onclick="location.reload()" class="underline p-2">โหลดใหม่</button></div>';
+    }
+    function startCloudData() {
+        if (!window.db || dataStarted) return;
+        dataStarted = true;
+        renderCart();
+        document.getElementById('pos-product-grid').innerHTML = '<div class="col-span-full text-center py-8 text-sm">กำลังโหลดสินค้า…</div>';
         window.fbOnSnapshot(window.fbCollection(window.db, "products"), snap => {
           products = []; snap.forEach(d => products.push({ docId: d.id, ...d.data() }));
           renderPOSProducts(); renderInventoryTable();
-        });
+        }, showDataError);
         window.fbOnSnapshot(window.fbCollection(window.db, "salesHistory"), snap => {
           salesHistory = []; snap.forEach(d => salesHistory.push({ docId: d.id, ...d.data() }));
           salesHistory.sort((a, b) => b.timestamp - a.timestamp); renderReports();
@@ -390,8 +412,11 @@
           if (savedAccounts.length > 0) activeAccount = savedAccounts.find(a => a.isDefault) || savedAccounts[0];
           renderAccountDropdown(); renderAccountsList();
         });
-      }, 400);
-    });
+    }
+    window.addEventListener('firebase-ready', startCloudData);
+    window.addEventListener('firebase-error', () => showDataError(window.firebaseLoadError));
+    startCloudData();
+    if (window.firebaseLoadError) showDataError(window.firebaseLoadError);
 
     function switchTab(tab) {
       ['pos', 'inventory', 'report'].forEach(t => {
