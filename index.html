@@ -88,7 +88,13 @@
       height: var(--app-height, 100dvh); box-sizing: border-box;
       overflow: hidden;
     }
+    #modal-payment::before {
+      content: ''; position: fixed; inset: 0;
+      background: rgba(0,0,0,.3); backdrop-filter: blur(4px);
+      pointer-events: none;
+    }
     #modal-payment > div {
+      position: relative;
       box-sizing: border-box; min-height: 0;
       max-height: calc(var(--app-height, 100dvh) - 2rem);
       overflow-y: auto; -webkit-overflow-scrolling: touch;
@@ -182,7 +188,7 @@
   </div>
 
   <!-- MODAL PAYMENT -->
-  <div id="modal-payment" onclick="if (event.target === this) closePaymentModal()" class="fixed inset-0 bg-black/30 backdrop-blur-sm hidden flex justify-center items-center z-50 p-4">
+  <div id="modal-payment" onclick="if (event.target === this) closePaymentModal()" class="fixed inset-0 hidden flex justify-center items-center z-50 p-4">
     <div class="bg-white rounded-3xl w-full max-w-sm p-6 text-center shadow-2xl relative border">
       <div class="bg-pastel-green -mx-6 -mt-6 p-4 text-white mb-4 rounded-t-3xl flex justify-between items-center">
         <div><p class="text-[10px] tracking-widest uppercase opacity-80 text-left">ชำระเงิน</p><p class="text-xs font-medium text-left">เลือกเงินสดหรือสแกนจ่าย</p></div>
@@ -397,9 +403,7 @@
       const viewport = window.visualViewport;
       document.documentElement.style.setProperty('--app-height', (viewport ? viewport.height : window.innerHeight) + 'px');
       document.documentElement.style.setProperty('--viewport-top', (viewport ? viewport.offsetTop : 0) + 'px');
-      if (document.activeElement && document.activeElement.id === 'cash-received') {
-        requestAnimationFrame(() => document.activeElement.id === 'cash-received' && document.activeElement.scrollIntoView({ block: 'nearest' }));
-      }
+
     }
     resizeApp();
     window.addEventListener('resize', resizeApp);
