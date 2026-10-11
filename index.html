@@ -30,7 +30,7 @@
       import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js")
     ]);
     const { initializeApp } = appSDK;
-    const { getFirestore, collection, onSnapshot, doc, setDoc, addDoc, deleteDoc, updateDoc, getDocs } = firestoreSDK;
+    const { getFirestore, collection, onSnapshot, doc, setDoc, addDoc, deleteDoc, updateDoc, getDocs, writeBatch } = firestoreSDK;
 
     const db = getFirestore(initializeApp({
       apiKey: "AIzaSyBDJ--m-bsQvyWpwTUlKe-lc9pvuMtAN7k",
@@ -51,6 +51,7 @@
     window.fbDeleteDoc = deleteDoc;
     window.fbUpdateDoc = updateDoc;
     window.fbGetDocs = getDocs;
+    window.fbWriteBatch = writeBatch;
     window.dispatchEvent(new Event('firebase-ready'));
     } catch (error) {
       window.firebaseLoadError = error;
@@ -566,7 +567,23 @@
         bubble.textContent = label || name;
         button.append(bubble);
         button.onclick = () => choose(name);
-        list.append(button);
+        const row = document.createElement('div'); row.className = 'flex items-center';
+        row.append(button);
+        if (name && names.includes(name)) {
+          const edit = document.createElement('button'); edit.type = 'button';
+          edit.textContent = 'แก้ชื่อ'; edit.className = 'shrink-0 text-xs px-2 py-2 text-slate-500';
+          edit.setAttribute('aria-label', 'แก้ชื่อผู้ขาย ' + name);
+          edit.onclick = async () => {
+            const value = prompt('เปลี่ยนชื่อผู้ขาย ' + name + ' เป็น', name);
+            if (value === null || value.trim() === name) return;
+            edit.disabled = true;
+            try { await renameSeller(name, value); fillSellerChoices(list, '', choose, allowClear); }
+            catch (error) { alert('เปลี่ยนชื่อไม่สำเร็จ: ' + error.message); }
+            finally { edit.disabled = false; }
+          };
+          row.append(edit);
+        }
+        list.append(row);
       }
       if (allowClear) option('', 'ไม่ระบุผู้ขาย');
       names.filter(n => n.toLowerCase().includes(search.toLowerCase())).forEach(n => option(n));
@@ -585,6 +602,32 @@
       const list = document.getElementById('person-options');
       fillSellerChoices(list, document.getElementById('input-prod-person').value, chooseProductSeller, true);
       if (open) list.classList.remove('hidden');
+    }
+    let sellerRenaming = false;
+    async function renameSeller(oldName, value) {
+      const name = value.trim();
+      if (!name) throw new Error('กรุณากรอกชื่อผู้ขาย');
+      if (name === oldName) return;
+      if (sellerRenaming) throw new Error('กำลังเปลี่ยนชื่อ กรุณารอสักครู่');
+      if (sellerNames().some(n => n !== oldName && n.toLowerCase() === name.toLowerCase())) throw new Error('ชื่อผู้ขายนี้มีอยู่แล้ว');
+      sellerRenaming = true;
+      try {
+        const snapshot = await window.fbGetDocs(window.fbCollection(window.db, 'products'));
+        const matches = snapshot.docs.filter(d => (d.data().person || '').trim() === oldName);
+        if (matches.length > 500) throw new Error('มีสินค้ามากเกินกว่าจะเปลี่ยนชื่อพร้อมกัน');
+        if (matches.length) {
+          const batch = window.fbWriteBatch(window.db);
+          matches.forEach(d => batch.update(d.ref, { person: name }));
+          await batch.commit();
+        }
+        extraSellers = extraSellers.filter(n => n !== oldName);
+        if (!extraSellers.includes(name)) extraSellers.push(name);
+        products.forEach(p => { if ((p.person || '').trim() === oldName) p.person = name; });
+        if (currentPerson === oldName) currentPerson = name;
+        const input = document.getElementById('input-prod-person');
+        if (input.value.trim() === oldName) input.value = name;
+        renderPersonFilters(); renderPOSProducts(); renderInventoryTable();
+      } finally { sellerRenaming = false; }
     }
     async function assignProductSeller(productId, name) {
       name = canonicalSeller(name);
