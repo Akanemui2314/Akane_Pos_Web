@@ -268,7 +268,14 @@
           <div><label class="block text-xs font-semibold text-pastel-dark/70 mb-1">ราคา (บาท) *</label><input type="number" id="input-prod-price" placeholder="0" min="0" class="w-full border border-slate-200 rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-pastel-blue"></div>
           <div><label class="block text-xs font-semibold text-pastel-dark/70 mb-1">จำนวนสต็อก *</label><input type="number" id="input-prod-stock" placeholder="100" min="0" class="w-full border border-slate-200 rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-pastel-blue"></div>
         </div>
-        <div><label class="block text-xs font-semibold text-pastel-dark/70 mb-1">หมวดหมู่</label><input type="text" id="input-prod-category" placeholder="เช่น Acrylic, Sticker" class="w-full border border-slate-200 rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-pastel-blue"></div>
+        <div id="category-picker">
+          <label for="input-prod-category" class="block text-xs font-semibold text-pastel-dark/70 mb-1">หมวดหมู่</label>
+          <div class="flex items-center border border-slate-200 rounded-xl bg-white">
+            <input type="text" id="input-prod-category" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="category-options" aria-autocomplete="list" placeholder="เลือกหรือพิมพ์หมวดหมู่ใหม่" onfocus="renderCategoryOptions()" oninput="renderCategoryOptions()" onkeydown="handleCategoryKey(event)" class="w-full min-w-0 rounded-xl p-2.5 text-sm outline-none">
+            <button type="button" aria-label="เลือกหมวดหมู่" onclick="document.getElementById('input-prod-category').focus(); renderCategoryOptions()" class="px-3 py-2 text-slate-400">▾</button>
+          </div>
+          <div id="category-options" role="listbox" aria-label="หมวดหมู่" class="hidden mt-2 border border-slate-200 rounded-xl bg-slate-50 max-h-40 overflow-y-auto p-1 space-y-1"></div>
+        </div>
       </div>
       <div class="mt-6 flex justify-end gap-2">
         <button onclick="closeProductModal()" class="px-4 py-2.5 rounded-xl text-sm font-semibold text-pastel-dark/70 hover:bg-slate-100">ยกเลิก</button>
@@ -584,7 +591,85 @@
       }).join('');
     }
 
+    let extraCategories = [];
+    let categoryOptionIndex = -1;
+    function getProductCategories() {
+      return [...new Set([...products.map(p => p.category || 'ทั่วไป'), ...extraCategories])];
+    }
+    function closeCategoryOptions() {
+      document.getElementById('category-options').classList.add('hidden');
+      document.getElementById('input-prod-category').setAttribute('aria-expanded', 'false');
+      categoryOptionIndex = -1;
+    }
+    function chooseCategory(category) {
+      document.getElementById('input-prod-category').value = category;
+      if (!getProductCategories().includes(category)) extraCategories.push(category);
+      closeCategoryOptions();
+    }
+    function renderCategoryOptions() {
+      const input = document.getElementById('input-prod-category');
+      const list = document.getElementById('category-options');
+      const query = input.value.trim();
+      const categories = getProductCategories();
+      list.replaceChildren();
+      categoryOptionIndex = -1;
+      function addOption(name, create) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.setAttribute('role', 'option');
+        button.setAttribute('aria-selected', 'false');
+        button.className = 'block w-full text-left rounded-lg px-3 py-2 text-sm hover:bg-pastel-lightgreen';
+        const tag = document.createElement('span');
+        tag.className = 'inline-block bg-pastel-purple/60 rounded-md px-2 py-0.5';
+        tag.textContent = name;
+        if (create) button.append('＋ เพิ่มหมวดหมู่ใหม่ ');
+        button.append(tag);
+        button.onclick = () => chooseCategory(name);
+        list.append(button);
+      }
+      categories.filter(c => c.toLowerCase().includes(query.toLowerCase())).forEach(c => addOption(c, false));
+      const existing = categories.find(c => c.toLowerCase() === query.toLowerCase());
+      if (query && !existing) addOption(query, true);
+      if (!list.children.length) {
+        const hint = document.createElement('p');
+        hint.className = 'p-3 text-xs text-slate-500';
+        hint.textContent = 'พิมพ์ชื่อเพื่อเพิ่มหมวดหมู่ใหม่';
+        list.append(hint);
+      }
+      list.classList.remove('hidden');
+      input.setAttribute('aria-expanded', 'true');
+    }
+    function handleCategoryKey(event) {
+      const list = document.getElementById('category-options');
+      const options = [...list.querySelectorAll('button')];
+      if (event.key === 'Escape') { event.preventDefault(); closeCategoryOptions(); }
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (list.classList.contains('hidden')) { renderCategoryOptions(); return; }
+        if (!options.length) return;
+        categoryOptionIndex = (categoryOptionIndex + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
+        options.forEach((option, i) => {
+          option.classList.toggle('bg-pastel-lightgreen', i === categoryOptionIndex);
+          option.setAttribute('aria-selected', String(i === categoryOptionIndex));
+        });
+        options[categoryOptionIndex].scrollIntoView({block: 'nearest'});
+      }
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        if (categoryOptionIndex >= 0 && options[categoryOptionIndex]) options[categoryOptionIndex].click();
+        else {
+          const query = event.target.value.trim();
+          if (query) chooseCategory(getProductCategories().find(c => c.toLowerCase() === query.toLowerCase()) || query);
+        }
+      }
+      if (event.key === 'Tab') closeCategoryOptions();
+    }
+    document.addEventListener('click', event => {
+      if (!document.getElementById('category-picker').contains(event.target)) closeCategoryOptions();
+    });
+
     function openProductModal(editDocId = null) {
+      closeCategoryOptions();
       currentImageBase64 = ''; currentFocusY = 15;
       document.getElementById('crop-pos-slider').value = 15;
       document.getElementById('crop-pos-val').innerText = '15%';
@@ -635,6 +720,7 @@
       let price = parseFloat(document.getElementById('input-prod-price').value);
       let stock = parseInt(document.getElementById('input-prod-stock').value) || 0;
       let category = document.getElementById('input-prod-category').value.trim() || 'ทั่วไป';
+      category = getProductCategories().find(c => c.toLowerCase() === category.toLowerCase()) || category;
 
       if (!name || isNaN(price)) return alert('กรอกชื่อและราคาให้ถูกต้อง');
 
