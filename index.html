@@ -135,6 +135,7 @@
         </div>
         <div id="category-pills" class="flex gap-2 overflow-x-auto w-full sm:w-auto no-scrollbar py-1"></div>
       </div>
+      <div class="flex items-center gap-2 mb-4"><span class="text-xs text-slate-500 shrink-0">ชื่อคน</span><div id="person-pills" class="flex gap-2 overflow-x-auto py-1"></div></div>
       <div id="pos-product-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4"></div>
     </main>
 
@@ -270,6 +271,11 @@
         <div class="grid grid-cols-2 gap-3">
           <div><label class="block text-xs font-semibold text-pastel-dark/70 mb-1">ราคา (บาท) *</label><input type="number" id="input-prod-price" placeholder="0" min="0" class="w-full border border-slate-200 rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-pastel-blue"></div>
           <div><label class="block text-xs font-semibold text-pastel-dark/70 mb-1">จำนวนสต็อก *</label><input type="number" id="input-prod-stock" placeholder="100" min="0" class="w-full border border-slate-200 rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-pastel-blue"></div>
+        </div>
+        <div>
+          <label for="input-prod-person" class="block text-xs font-semibold text-pastel-dark/70 mb-1">ชื่อคน</label>
+          <input id="input-prod-person" type="text" list="person-options" autocomplete="off" placeholder="เลือกหรือพิมพ์ชื่อใหม่ เช่น A, B" class="w-full border border-slate-200 rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-pastel-blue">
+          <datalist id="person-options"></datalist>
         </div>
         <div id="category-picker">
           <label for="input-prod-category" class="block text-xs font-semibold text-pastel-dark/70 mb-1">หมวดหมู่</label>
@@ -537,7 +543,38 @@
       if(tab==='report') renderReports();
     }
 
+    let currentPerson = '';
+    function getPeople() {
+      return [...new Set(products.map(p => (p.person || '').trim()).filter(Boolean))].sort((a,b) => a.localeCompare(b, 'th'));
+    }
+    function renderPersonOptions() {
+      const list = document.getElementById('person-options');
+      list.replaceChildren();
+      getPeople().forEach(name => {
+        const option = document.createElement('option');
+        option.value = name;
+        list.append(option);
+      });
+    }
+    function renderPersonFilters() {
+      const list = document.getElementById('person-pills');
+      const people = getPeople();
+      if (currentPerson && !people.includes(currentPerson)) currentPerson = '';
+      list.replaceChildren();
+      ['', ...people].forEach(name => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = name || 'ทุกคน';
+        button.className = 'px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap ' + (currentPerson === name ? 'bg-pastel-green text-white' : 'bg-slate-100 text-pastel-dark');
+        button.onclick = () => { currentPerson = name; renderPOSProducts(); };
+        list.append(button);
+      });
+    }
+    function matchesPerson(product) { return !currentPerson || product.person === currentPerson; }
+
     function renderPOSProducts() {
+      renderPersonFilters();
+      renderPersonOptions();
       const grid = document.getElementById('pos-product-grid'), search = document.getElementById('search-pos').value.toLowerCase();
       const categories = ['ALL', ...getProductCategories()];
       
@@ -547,7 +584,7 @@
         return `<button onclick="currentCategory='${cat}';renderPOSProducts()" style="background-color:${getCategoryColor(cat)}" class="px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition ${colorClass}">${cat}</button>`;
       }).join('');
       
-      const filtered = products.filter(p => p.name.toLowerCase().includes(search) && (currentCategory === 'ALL' || (p.category || 'ทั่วไป') === currentCategory));
+      const filtered = products.filter(p => matchesPerson(p) && p.name.toLowerCase().includes(search) && (currentCategory === 'ALL' || (p.category || 'ทั่วไป') === currentCategory));
       grid.innerHTML = filtered.length === 0 ? `<div class="col-span-full text-center py-12 text-slate-300">ไม่พบสินค้า</div>` : filtered.map(p => {
         const posY = p.focusY !== undefined ? p.focusY : 15;
         return `
@@ -764,6 +801,8 @@
       document.getElementById('input-prod-price').value = '';
       document.getElementById('input-prod-stock').value = '';
       document.getElementById('input-prod-category').value = '';
+      document.getElementById('input-prod-person').value = '';
+      renderPersonOptions();
       document.getElementById('img-preview').classList.add('hidden');
       document.getElementById('img-placeholder-icon').classList.remove('hidden');
       document.getElementById('reposition-control').classList.add('hidden');
@@ -777,6 +816,7 @@
           document.getElementById('input-prod-price').value = p.price;
           document.getElementById('input-prod-stock').value = p.stock;
           document.getElementById('input-prod-category').value = p.category || '';
+          document.getElementById('input-prod-person').value = p.person || '';
           currentImageZoom = p.imageZoom || 1;
           document.getElementById('crop-zoom-slider').value = currentImageZoom * 100;
           if (p.focusY !== undefined) {
@@ -812,6 +852,8 @@
       let stock = parseInt(document.getElementById('input-prod-stock').value) || 0;
       let category = document.getElementById('input-prod-category').value.trim() || 'ทั่วไป';
       category = getProductCategories().find(c => c.toLowerCase() === category.toLowerCase()) || category;
+      let person = document.getElementById('input-prod-person').value.trim();
+      person = getPeople().find(p => p.toLowerCase() === person.toLowerCase()) || person;
 
       if (!name || isNaN(price)) return alert('กรอกชื่อและราคาให้ถูกต้อง');
 
@@ -819,7 +861,7 @@
       try {
         if (imageProcessing) await imageProcessing;
         const imageForSave = currentImageBase64 ? await compressProductImage(currentImageBase64) : '';
-        const data = { name, price, stock, category, focusY: Number(currentFocusY), imageZoom: currentImageZoom };
+        const data = { name, price, stock, category, person, focusY: Number(currentFocusY), imageZoom: currentImageZoom };
         if (imageForSave) data.image = imageForSave;
         const payloadBytes = new TextEncoder().encode(JSON.stringify(data)).length;
         if (imageForSave.length > MAX_PRODUCT_IMAGE_BYTES || payloadBytes > 900000) {
