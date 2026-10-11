@@ -818,12 +818,15 @@
       productSaving = true;
       try {
         if (imageProcessing) await imageProcessing;
-        if (currentImageBase64 && new TextEncoder().encode(currentImageBase64).length > MAX_PRODUCT_IMAGE_BYTES) {
-          currentImageBase64 = await compressProductImage(currentImageBase64);
-          document.getElementById('img-preview').src = currentImageBase64;
+        const imageForSave = currentImageBase64 ? await compressProductImage(currentImageBase64) : '';
+        const data = { name, price, stock, category, focusY: Number(currentFocusY), imageZoom: currentImageZoom };
+        if (imageForSave) data.image = imageForSave;
+        const payloadBytes = new TextEncoder().encode(JSON.stringify(data)).length;
+        if (imageForSave.length > MAX_PRODUCT_IMAGE_BYTES || payloadBytes > 900000) {
+          throw new Error('ข้อมูลรูปยังใหญ่เกินไป กรุณาเลือกรูปใหม่');
         }
-        let data = { name, price, stock, category, focusY: Number(currentFocusY), imageZoom: currentImageZoom };
-        if (currentImageBase64) data.image = currentImageBase64;
+        currentImageBase64 = imageForSave;
+        if (imageForSave) document.getElementById('img-preview').src = imageForSave;
 
         if (id) await window.fbUpdateDoc(window.fbDoc(window.db, "products", id), data);
         else await window.fbAddDoc(window.fbCollection(window.db, "products"), data);
