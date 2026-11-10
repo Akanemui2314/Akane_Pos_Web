@@ -341,12 +341,15 @@
       for (const char of name) hash = (hash * 31 + char.codePointAt(0)) >>> 0;
       return categoryPalette[hash % categoryPalette.length];
     }
+    function styleCategoryTag(tag, category) {
+      const color = getCategoryColor(category);
+      const [r, g, b] = color.slice(1).match(/../g).map(channel => parseInt(channel, 16));
+      tag.style.backgroundColor = color;
+      tag.style.color = (r * 299 + g * 587 + b * 114) / 1000 < 145 ? '#FFFFFF' : '#26382A';
+    }
     function refreshInventoryCategoryTags() {
       document.querySelectorAll('[data-inventory-category]').forEach(tag => {
-        const color = getCategoryColor(tag.dataset.inventoryCategory);
-        const [r, g, b] = color.slice(1).match(/../g).map(channel => parseInt(channel, 16));
-        tag.style.backgroundColor = color;
-        tag.style.color = (r * 299 + g * 587 + b * 114) / 1000 < 145 ? '#FFFFFF' : '#26382A';
+        styleCategoryTag(tag, tag.dataset.inventoryCategory);
       });
     }
     function updateCategoryColorInput() {
@@ -797,8 +800,9 @@
       const categoryPills = document.getElementById('category-pills'); categoryPills.replaceChildren();
       categories.forEach(cat => {
         const button = document.createElement('button'); button.type = 'button'; button.textContent = cat;
-        button.style.backgroundColor = getCategoryColor(cat);
-        button.className = 'px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition ' + (cat === 'ALL' ? 'text-white ' : 'text-pastel-dark ') + (currentCategory === cat ? 'ring-2 ring-pastel-green ring-offset-2 shadow-sm' : 'hover:opacity-80');
+        styleCategoryTag(button, cat);
+        if (cat === 'ALL') button.style.color = '#FFFFFF';
+        button.className = 'px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition ' + (currentCategory === cat ? 'ring-2 ring-pastel-green ring-offset-2 shadow-sm' : 'hover:opacity-80');
         button.onclick = () => { currentCategory = cat; renderPOSProducts(); }; categoryPills.append(button);
       });
 
